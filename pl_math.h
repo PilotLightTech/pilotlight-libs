@@ -1,5 +1,5 @@
 /*
-   pl_math.h, v0.4 (WIP)
+   pl_math.h, v0.6 (WIP)
 
    Do this:
         #define PL_MATH_INCLUDE_FUNCTIONS
@@ -13,8 +13,8 @@
 */
 
 // library version
-#define PL_MATH_VERSION    "0.6.3"
-#define PL_MATH_VERSION_NUM 00603
+#define PL_MATH_VERSION    "0.6.4"
+#define PL_MATH_VERSION_NUM 00604
 
 /*
 Index of this file:
@@ -328,6 +328,7 @@ static inline plMat4 pl_mat4_rotate_vec3          (float fAngle, plVec3 tVec);
 static inline plMat4 pl_mat4_rotate_xyz           (float fAngle, float fX, float fY, float fZ) { return pl_mat4_rotate_vec3(fAngle, pl_create_vec3(fX, fY, fZ));}
 static inline plMat4 pl_mat4_scale_xyz            (float fX, float fY, float fZ)               { return pl_create_mat4_diag(fX, fY, fZ, 1.0f);}
 static inline plMat4 pl_mat4_scale_vec3           (plVec3 tVec)                                { return pl_mat4_scale_xyz(tVec.x, tVec.y, tVec.z);}
+static inline plMat4 pl_mat4_rotate_quat          (plVec4 tQ);
 static inline plMat4 pl_rotation_translation_scale(plVec4 tQ, plVec3 tV, plVec3 tS);
 
 // transforms (optimized for orthogonal matrices)
@@ -530,41 +531,47 @@ pl_mat4_invert(const plMat4* ptMat)
 }
 
 static inline plMat4
+pl_mat4_rotate_quat(plVec4 tQ)
+{
+    const float x2 = tQ.x * tQ.x;
+    const float y2 = tQ.y * tQ.y;
+    const float z2 = tQ.z * tQ.z;
+    const float xy = tQ.x * tQ.y;
+    const float xz = tQ.x * tQ.z;
+    const float yz = tQ.y * tQ.z;
+    const float wx = tQ.w * tQ.x;
+    const float wy = tQ.w * tQ.y;
+    const float wz = tQ.w * tQ.z;
+
+    plMat4 tResult = {0};
+    tResult.col[0].x = 1.0f - 2.0f * (y2 + z2);
+    tResult.col[0].y = 2.0f * (xy + wz);
+    tResult.col[0].z = 2.0f * (xz - wy);
+
+    tResult.col[1].x = 2.0f * (xy - wz);
+    tResult.col[1].y = 1.0f - 2.0f * (x2 + z2);
+    tResult.col[1].z = 2.0f * (yz + wx);
+
+    tResult.col[2].x = 2.0f * (xz + wy);
+    tResult.col[2].y = 2.0f * (yz - wx);
+    tResult.col[2].z = 1.0f - 2.0f * (x2 + y2);
+
+    tResult.col[3].w = 1.0f;
+
+    return tResult;
+}
+
+static inline plMat4
 pl_rotation_translation_scale(plVec4 tQ, plVec3 tV, plVec3 tS)
 {
 
-    const float x2 = tQ.x + tQ.x;
-    const float y2 = tQ.y + tQ.y;
-    const float z2 = tQ.z + tQ.z;
-    const float xx = tQ.x * x2;
-    const float xy = tQ.x * y2;
-    const float xz = tQ.x * z2;
-    const float yy = tQ.y * y2;
-    const float yz = tQ.y * z2;
-    const float zz = tQ.z * z2;
-    const float wx = tQ.w * x2;
-    const float wy = tQ.w * y2;
-    const float wz = tQ.w * z2;
+    const plMat4 tScale = pl_mat4_scale_vec3(tS);
+    const plMat4 tTranslation = pl_mat4_translate_vec3(tV);
+    const plMat4 tRotation = pl_mat4_rotate_quat(tQ);
 
-    plMat4 tResult;
-    tResult.x11 = (1.0f - (yy + zz)) * tS.x;
-    tResult.x21 = (xy + wz) * tS.x;
-    tResult.x31 = (xz - wy) * tS.x;
-    tResult.x41 = 0.0f;
-    tResult.x12 = (xy - wz) * tS.y;
-    tResult.x22 = (1 - (xx + zz)) * tS.y;
-    tResult.x32 = (yz + wx) * tS.y;
-    tResult.x42 = 0.0f;
-    tResult.x13 = (xz + wy) * tS.z;
-    tResult.x23 = (yz - wx) * tS.z;
-    tResult.x33 = (1.0f - (xx + yy)) * tS.z;
-    tResult.x43 = 0.0f;
-    tResult.x14 = tV.x;
-    tResult.x24 = tV.y;
-    tResult.x34 = tV.z;
-    tResult.x44 = 1.0f;
-
-    return tResult;
+    plMat4 tResult0 = pl_mul_mat4(&tRotation, &tScale);
+    tResult0 = pl_mul_mat4(&tTranslation, &tResult0);
+    return tResult0;
 }
 
 static inline plMat4
