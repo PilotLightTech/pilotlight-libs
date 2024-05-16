@@ -20,8 +20,8 @@
 */
 
 // library version
-#define PL_MEMORY_VERSION    "0.4.0"
-#define PL_MEMORY_VERSION_NUM 00400
+#define PL_MEMORY_VERSION    "0.5.0"
+#define PL_MEMORY_VERSION_NUM 00500
 
 /*
 Index of this file:
@@ -125,7 +125,7 @@ void                   pl_stack_allocator_free_bottom_to_marker(plStackAllocator
 
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~pool allocator~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-void  pl_pool_allocator_init (plPoolAllocator* ptAllocator, size_t szItemCount, size_t szItemSize, size_t szItemAlignment, size_t szBufferSize, void* pBuffer);
+void  pl_pool_allocator_init (plPoolAllocator* ptAllocator, size_t szItemCount, size_t szItemSize, size_t szItemAlignment, size_t* pszBufferSize, void* pBuffer);
 void* pl_pool_allocator_alloc(plPoolAllocator* ptAllocator);
 void  pl_pool_allocator_free (plPoolAllocator* ptAllocator, void* pItem);
 
@@ -675,18 +675,27 @@ pl_stack_allocator_reset(plStackAllocator* ptAllocator)
 }
 
 void
-pl_pool_allocator_init(plPoolAllocator* ptAllocator, size_t szItemCount, size_t szItemSize, size_t szItemAlignment, size_t szBufferSize, void* pBuffer)
+pl_pool_allocator_init(plPoolAllocator* ptAllocator, size_t szItemCount, size_t szItemSize, size_t szItemAlignment, size_t* pszBufferSize, void* pBuffer)
 {
     PL_ASSERT(ptAllocator);
     PL_ASSERT(szItemCount > 0);
     PL_ASSERT(szItemSize > 0);
-    PL_ASSERT(szBufferSize > 0);
-    PL_ASSERT(pBuffer);
+    PL_ASSERT(pszBufferSize);
+
+    if(szItemAlignment == 0)
+        szItemAlignment = szItemSize;
+
+    if(pBuffer == NULL)
+    {
+        size_t szAlignedItemSize = pl__align_forward_size(szItemSize, szItemAlignment);
+        *pszBufferSize = szAlignedItemSize * szItemCount + szItemAlignment;
+        return;
+    }
 
     ptAllocator->szFreeItems = szItemCount;
     ptAllocator->szRequestedItemSize = szItemSize;
-    ptAllocator->szGivenSize = szBufferSize;
-    ptAllocator->szUsableSize = szBufferSize;
+    ptAllocator->szGivenSize = *pszBufferSize;
+    ptAllocator->szUsableSize = *pszBufferSize;
     ptAllocator->pucBuffer = (unsigned char*)pBuffer;
     ptAllocator->szItemSize = pl__align_forward_size(szItemSize, szItemAlignment);
 
@@ -710,7 +719,8 @@ pl_pool_allocator_init(plPoolAllocator* ptAllocator, size_t szItemCount, size_t 
 void*
 pl_pool_allocator_alloc(plPoolAllocator* ptAllocator)
 {
-    PL_ASSERT(ptAllocator->szFreeItems > 0 && "pool allocator is full");
+    if(ptAllocator->szFreeItems == 0)
+        return NULL;
     ptAllocator->szFreeItems--;
     plPoolAllocatorNode* pFirstNode = ptAllocator->pFreeList;
     plPoolAllocatorNode* ptNextNode = pFirstNode->ptNextNode;
